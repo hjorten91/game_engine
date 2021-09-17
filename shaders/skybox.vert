@@ -5,10 +5,11 @@ in vec2 inTexCoord;
 
 out vec2 infragTexCoord;
 
-uniform mat4 groundMatrix;
+uniform mat4 skyboxMatrix;
 
 void main(void)
 {
-	gl_Position = groundMatrix * vec4(in_Position, 1.0);
+
+	gl_Position = skyboxMatrix * vec4(in_Position, 1.0);
 	infragTexCoord = inTexCoord;
 }

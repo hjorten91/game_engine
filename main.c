@@ -26,24 +26,24 @@
 
 // frustum
 #define near 1.0
-#define far 30.0
+#define far 2000.0
 #define right 0.5
 #define left -0.5
 #define top 0.5
 #define bottom -0.5
 
 // shaders
-GLuint program, ground_program;
+GLuint program, ground_program, skybox_program;
 
 // textures
-GLuint bunnyTex, groundTex;
+GLuint bunnyTex, groundTex, skyboxTex;
+
+// Models
+Model *bunny, *ground, *skybox;
 
 // camera vectors
 struct camera cam_obj;
 struct camera * cam = &cam_obj;
-
-// Models
-Model *bunny, *ground;
 
 // handles mouse and camera interaction
 void mouse(int x, int y){
@@ -68,20 +68,25 @@ void upload_models(void)
 {
 	bunny = LoadModel("objects/bunnyplus.obj");
 	ground = LoadModel("objects/skybox.obj");
+	skybox = LoadModel("objects/skybox.obj");
 }
 
 void upload_textures(void)
 {
 	// upload textures
-	LoadTGATextureSimple("images/maskros512.tga", &bunnyTex);
+	LoadTGATextureSimple("images/conc.tga", &bunnyTex);
 	LoadTGATextureSimple("images/grass.tga", &groundTex);
+	LoadTGATextureSimple("images/skybox512.tga", &skyboxTex);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, bunnyTex);
 	glUniform1i(glGetUniformLocation(program, "texUnit0"), 0); // Texture unit 0
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, groundTex);
-	glUniform1i(glGetUniformLocation(ground_program, "texUnit1"), 1); // Texture unit 0
+	glUniform1i(glGetUniformLocation(ground_program, "texUnit1"), 1); // Texture unit 1
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, skyboxTex);
+	glUniform1i(glGetUniformLocation(skybox_program, "texUnit2"), 2); // Texture unit 2
 }
 
 void init(void)
@@ -99,22 +104,19 @@ void init(void)
 	// Load and compile shader
 	program = loadShaders("shaders/main.vert", "shaders/main.frag");
 	ground_program = loadShaders("shaders/ground.vert", "shaders/ground.frag");
+	skybox_program = loadShaders("shaders/skybox.vert", "shaders/skybox.frag");
 
 	upload_models();
 	upload_textures();
 
-	printError("init shader");
-
 	// End of upload of geometry
 	init_camera();
 
-	// hide mouse cursor
+	// hide mouse cursor and init mouse inputs
 	glutHideCursor();
-
-	// init controls
 	glutPassiveMotionFunc(mouse);
 
-	printError("init arrays");
+	printError("init() ");
 }
 
 void drawBunny(void)
@@ -128,7 +130,7 @@ void drawBunny(void)
 	rot = Mult(Mult(Rx(t), Ry(t)), Rz(t));
 
 	// rotation * transformation * scale
-	modelMatrix = Mult(rot, trans);
+	modelMatrix = Mult(trans, rot);
 
 	// cameraMatrix = Rotation * Translation
 	cameraMatrix = lookAtv(cam->pos, cam->lookatpoint, cam->upvector);
@@ -138,6 +140,7 @@ void drawBunny(void)
 
 	// totalMatrix = projectionMatrix * cameraMatrix * modelMatrix
 	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniform1i(glGetUniformLocation(program,"texUnit0"),0);
 	glUniformMatrix4fv(glGetUniformLocation(program, "totalMatrix"), 1, GL_TRUE, totalMatrix.m);
 	DrawModel(bunny, program, "in_Position", "in_Normal", "inTexCoord");
 }
@@ -152,7 +155,7 @@ void drawGround(void)
 	trans = T(0.0f, -3.0f, 0.0f);
 	scale = S(100.0f,0.5f,100.0f);
 
-	// rotation * transformation * scale
+	// modelMatrix = rotation * transformation * scale
 	modelMatrix = Mult(trans, scale);
 
 	// cameraMatrix = Rotation * Translate * Scale
@@ -162,18 +165,50 @@ void drawGround(void)
 	projectionMatrix = frustum(left, right, bottom, top, near, far);
 
 	totalMatrix = Mult(Mult(projectionMatrix,cameraMatrix), modelMatrix);
+	glUniform1i(glGetUniformLocation(ground_program,"texUnit1"),1);
 	glUniformMatrix4fv(glGetUniformLocation(ground_program, "groundMatrix"), 1, GL_TRUE, totalMatrix.m);
-	DrawModel(ground, ground_program, "in_Position", "in_Normal", "inTexCoord");
+	DrawModel(ground, ground_program, "in_Position", NULL, "inTexCoord");
+}
+
+void drawSky(void)
+{
+	glUseProgram(skybox_program);
+	glDisable(GL_DEPTH_TEST);
+	mat4 trans, scale, modelMatrix, totalMatrix, projectionMatrix, cameraMatrix, skyboxMatrix;
+
+	// model to world matrix
+	trans = T(0.0f, -1.0f, 0.0f);
+	scale = S(1.0f,2.0f,1.0f);
+
+	// modelMatrix = rotation * transformation * scale
+	modelMatrix = Mult(trans, scale);
+
+	// cameraMatrix = Rotation * Translate * Scale
+	cameraMatrix = lookAtv(cam->pos, cam->lookatpoint, cam->upvector);
+	skyboxMatrix = cameraMatrix;
+	skyboxMatrix.m[3] = 0.0f;
+	skyboxMatrix.m[7] = 0.0f;
+	skyboxMatrix.m[11] = 0.0f;
+
+	// projection matrix
+	projectionMatrix = frustum(left, right, bottom, top, near, far);
+
+	totalMatrix = Mult(Mult(projectionMatrix, skyboxMatrix), modelMatrix);
+	glUniform1i(glGetUniformLocation(skybox_program,"texUnit2"),2);
+	glUniformMatrix4fv(glGetUniformLocation(skybox_program, "skyboxMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(skybox, skybox_program, "in_Position", NULL, "inTexCoord");
+
+	glEnable(GL_DEPTH_TEST);
 }
 
 void display(void)
 {
 	printError("pre display");
 
-
 	// clear the screen
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	drawSky();
 	drawBunny();
 	drawGround();
 
@@ -186,7 +221,7 @@ void OnTimer(int value)
 {
     glutPostRedisplay();
     glutTimerFunc(20, &OnTimer, value);
-		handle_keys(cam);
+		handle_keys(cam); // check for user input
 }
 
 int main(int argc, char *argv[])
@@ -194,6 +229,7 @@ int main(int argc, char *argv[])
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 	glutInitContextVersion(3, 2);
+	glutInitWindowSize (600, 600);
 	glutCreateWindow ("GL3 white triangle example");
 	glutDisplayFunc(display);
 	init();
