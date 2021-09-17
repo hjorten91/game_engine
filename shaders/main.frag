@@ -4,7 +4,7 @@ in vec3 in_frag_Normal;
 in vec2 infragTexCoord;
 out vec4 out_Color;
 
-uniform sampler2D texUnit;
+uniform sampler2D texUnit0;
 
 void main(void)
 {
@@ -14,5 +14,5 @@ void main(void)
 	shade = dot(normalize(in_frag_Normal), light);
 	//out_Color = vec4(shade, shade, shade, 1.0);
 
-	out_Color = shade * texture(texUnit, infragTexCoord);
+	out_Color = shade * texture(texUnit0, infragTexCoord);
 }

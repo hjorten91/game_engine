@@ -11,68 +11,60 @@ This function handles all user keyboard inputs i.e keyboard controls
 */
 void handle_keys(struct camera * cam)
 {
+	// cameras vectors
+	vec3 z_axis = VectorSub(cam->lookatpoint,cam->pos); // forward
+	vec3 x_axis = CrossProduct(z_axis, cam->upvector);  // side
+
 	// translation/speed variable
 	const float speed = 0.5;
 
-	// w,s,a,d changes value of relevant axis of the cameraposition, which in turn
-	// translates the world when lookAt
+	// w,s,a,d changes value of relevant axis of the cameraposition
 	if(glutKeyIsDown('w'))
 	{
-		cam->pos.z += speed;
+		cam->pos = VectorAdd(cam->pos,ScalarMult(Normalize(z_axis),speed));
 	}
 	else if(glutKeyIsDown('s'))
 	{
-		cam->pos.z -= speed;
+		cam->pos = VectorAdd(cam->pos,ScalarMult(Normalize(z_axis),-speed));
 	}
 	if(glutKeyIsDown('a'))
 	{
-		cam->pos.x += speed;
+		cam->pos = VectorAdd(cam->pos,ScalarMult(Normalize(x_axis),-speed));
 	}
 	else if(glutKeyIsDown('d'))
 	{
-		cam->pos.x -= speed;
+		cam->pos = VectorAdd(cam->pos,ScalarMult(Normalize(x_axis),speed));
 	}
 }
 
 void fps_mouse(int deltax, int deltay, struct camera * cam)
 {
-	vec3 f = VectorSub(cam->lookatpoint,cam->pos);
-
+	vec3 z_axis = VectorSub(cam->lookatpoint,cam->pos);
+	vec3 x_axis = CrossProduct(z_axis, cam->upvector);
+	mat4 translation_matrix = T(z_axis.x, z_axis.y, z_axis.z);
 	const float rotate_value = M_PI/200;
+	mat4 r = IdentityMatrix();
 
-	// printf("origo: (%f, %f, %f) \n", f.x, f.y, f.z);
-	mat4 r;
-	r = IdentityMatrix();
+	// up/down roations
+	if(deltay > 0)
+	{
+		// ArbRotate deals with roation issues for when angle is pi/2, pi and pi/4
+		r = ArbRotate(x_axis,-rotate_value);
+	}
+	else if(deltay < 0)
+	{
+		r = ArbRotate(x_axis,rotate_value);
+	}
 
+	// left/right roations
 	if(deltax > 0)
 	{
-		// lookatpoint.x = cos(-rotate_value)*f.x + sin(-rotate_value)*f.z;
-		// lookatpoint.y = f.y;
-		// lookatpoint.z = -sin(-rotate_value)*f.x + cos(-rotate_value)*f.z;
 		r = Mult(Ry(-rotate_value),r);
 	}
 	else if(deltax < 0)
 	{
-		// lookatpoint.x = cos(rotate_value)*f.x + sin(rotate_value)*f.z;
-		// lookatpoint.y = f.y;
-		// lookatpoint.z = -sin(rotate_value)*f.x + cos(rotate_value)*f.z;
 		r = Mult(Ry(rotate_value),r);
 	}
 
-	if(deltay > 0)
-	{
-		// lookatpoint.x = f.x;
-		// lookatpoint.y = cos(rotate_value)*f.y - sin(rotate_value)*f.z;
-		// lookatpoint.z = sin(rotate_value)*f.y + cos(rotate_value)*f.z;
-		r = Mult(Rx(rotate_value),r);
-	}
-	else if(deltay < 0)
-	{
-		// lookatpoint.x = f.x;
-		// lookatpoint.y = cos(-rotate_value)*f.y - sin(-rotate_value)*f.z;
-		// lookatpoint.z = sin(-rotate_value)*f.y + cos(-rotate_value)*f.z;
-		r = Mult(Rx(-rotate_value),r);
-	}
-	// printf("%f,%f,%f,%f\n, %f,%f,%f,%f\n, %f,%f,%f,%f\n, %f,%f,%f,%f\n", r.m[0],r.m[1],r.m[2],r.m[3],r.m[4],r.m[5],r.m[6],r.m[7],r.m[8],r.m[9],r.m[10],r.m[11],r.m[12],r.m[13],r.m[14],r.m[15]);
-	cam->lookatpoint = MultVec3(r, f);
+	cam->lookatpoint = MultVec3(Mult(r, translation_matrix), Normalize(z_axis));
 }
