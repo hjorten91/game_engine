@@ -2,10 +2,6 @@
 #include "common/VectorUtils3.h"
 #include "common/Linux/MicroGlut.h"
 
-void test()
-{
-}
-
 /*
 This function handles all user keyboard inputs i.e keyboard controls
 */

@@ -14,8 +14,6 @@
 #include <stdio.h>
 #include "common/VectorUtils3.h"
 
-
-
 struct camera
 {
 	vec3 pos; // camera position
@@ -23,10 +21,7 @@ struct camera
 	vec3 upvector; // "orthoganal" vector point up from camera
 };
 
-void test();
 void fps_mouse(int deltax, int deltay, struct camera *cam);
 void handle_keys(struct camera *cam);
-
-
 
 #endif

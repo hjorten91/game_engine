@@ -24,6 +24,7 @@
 // Globals
 // Data would normally be read from files
 
+// frustum
 #define near 1.0
 #define far 30.0
 #define right 0.5
@@ -41,32 +42,10 @@ GLuint bunnyTex, groundTex;
 struct camera cam_obj;
 struct camera * cam = &cam_obj;
 
-// vertex array object
-unsigned int vertexArrayColor;
-
+// Models
 Model *bunny, *ground;
 
-unsigned int bunnyVertexArrayObjID;
-unsigned int bunnyVertexBufferObjID;
-unsigned int bunnyIndexBufferObjID;
-unsigned int bunnyNormalBufferObjID;
-unsigned int bunnyTexCoordBufferObjID;
-
-unsigned int groundVertexArrayObjID;
-
-// ground
-GLfloat g[] =
-{
-	-1.0f, 0.0f, -1.0f,
-	-1.0f, 0.0f, 1.0f,
-	1.0f, 0.0f, -1.0f,
-
-	1.0f, 0.0f, 1.0f,
-	1.0f, 0.0f, -1.0f,
-	-1.0f, 0.0f, 1.0f
-};
-
-
+// handles mouse and camera interaction
 void mouse(int x, int y){
 	int window_origox = round(glutGet(GLUT_WINDOW_WIDTH)/2);
 	int window_origoy = round(glutGet(GLUT_WINDOW_HEIGHT)/2);
@@ -75,30 +54,41 @@ void mouse(int x, int y){
 	fps_mouse(deltax,deltay,cam);
  	glutWarpPointer(window_origox, window_origoy);
 
-	printf("origo: (%f, %f, %f) \n", cam->lookatpoint.x, cam->lookatpoint.y, cam->lookatpoint.z);
+	// printf("origo: (%f, %f, %f) \n", cam->lookatpoint.x, cam->lookatpoint.y, cam->lookatpoint.z);
 }
 
 void init_camera(void)
 {
-	// init camera
 	cam->pos = SetVector(1,1,-1); // x,y,z
 	cam->lookatpoint = SetVector(0,0,0);
 	cam->upvector = SetVector(0,2,0);
-	// printf("%f,%f,%f\n", cam->pos.x,cam->pos.y,cam->pos.z);
 }
 
-// vertex array object
-unsigned int vertexArrayObjID;
+void upload_models(void)
+{
+	bunny = LoadModel("objects/bunnyplus.obj");
+	ground = LoadModel("objects/skybox.obj");
+}
+
+void upload_textures(void)
+{
+	// upload textures
+	LoadTGATextureSimple("images/maskros512.tga", &bunnyTex);
+	LoadTGATextureSimple("images/grass.tga", &groundTex);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bunnyTex);
+	glUniform1i(glGetUniformLocation(program, "texUnit0"), 0); // Texture unit 0
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, groundTex);
+	glUniform1i(glGetUniformLocation(ground_program, "texUnit1"), 1); // Texture unit 0
+}
 
 void init(void)
 {
-	// glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 	glEnable(GL_DEPTH_TEST);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_CULL_FACE);
-	// glDisable(GL_CULL_FACE);
-
-	// Reference to shader program
 
 	dumpInfo();
 
@@ -110,28 +100,15 @@ void init(void)
 	program = loadShaders("shaders/main.vert", "shaders/main.frag");
 	ground_program = loadShaders("shaders/ground.vert", "shaders/ground.frag");
 
+	upload_models();
+	upload_textures();
+
 	printError("init shader");
-
-	// upload objects to GPU
-	bunny = LoadModel("objects/bunnyplus.obj");
-	ground = LoadModel("objects/skybox.obj");
-
-	// upload textures
-	LoadTGATextureSimple("images/maskros512.tga", &bunnyTex);
-	LoadTGATextureSimple("images/grass.tga", &groundTex);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, bunnyTex);
-	glUniform1i(glGetUniformLocation(program, "texUnit0"), 0); // Texture unit 0
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, groundTex);
-	glUniform1i(glGetUniformLocation(ground_program, "texUnit1"), 1); // Texture unit 0
-
-	// upload ground polygon to GPU
 
 	// End of upload of geometry
 	init_camera();
 
+	// hide mouse cursor
 	glutHideCursor();
 
 	// init controls
@@ -146,10 +123,12 @@ void drawBunny(void)
 	mat4 rot, trans, modelMatrix, totalMatrix, projectionMatrix, cameraMatrix;
 	GLfloat t = (GLfloat)glutGet(GLUT_ELAPSED_TIME)/1000;
 
-	// model matrix
+	// model to world matrix
 	trans = T(0.0f,1.0f,3.0f);
-	rot = Mult(Mult(Ry(t), Rx(t)), Rz(t));
-	modelMatrix = Mult(trans, rot);
+	rot = Mult(Mult(Rx(t), Ry(t)), Rz(t));
+
+	// rotation * transformation * scale
+	modelMatrix = Mult(rot, trans);
 
 	// cameraMatrix = Rotation * Translation
 	cameraMatrix = lookAtv(cam->pos, cam->lookatpoint, cam->upvector);
@@ -157,29 +136,33 @@ void drawBunny(void)
 	// projection matrix
 	projectionMatrix = frustum(left, right, bottom, top, near, far);
 
-	totalMatrix = Mult(Mult(projectionMatrix,cameraMatrix), modelMatrix);
+	// totalMatrix = projectionMatrix * cameraMatrix * modelMatrix
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
 	glUniformMatrix4fv(glGetUniformLocation(program, "totalMatrix"), 1, GL_TRUE, totalMatrix.m);
 	DrawModel(bunny, program, "in_Position", "in_Normal", "inTexCoord");
 }
 
+// TODO: probably use cameraMatrix and projectionMatrix as an input to the function
 void drawGround(void)
 {
 	glUseProgram(ground_program);
-	mat4 trans, rot, total, scale, complete, cameraMatrix, projectionMatrix;
+	mat4 trans, scale, modelMatrix, totalMatrix, projectionMatrix, cameraMatrix;
+
+	// model to world matrix
 	trans = T(0.0f, -3.0f, 0.0f);
-	rot = Mult(Mult(Ry(0), Rx(0)), Rz(0));
-	total = Mult(rot, trans);
 	scale = S(100.0f,0.5f,100.0f);
-	total = Mult(total,scale);
+
+	// rotation * transformation * scale
+	modelMatrix = Mult(trans, scale);
+
+	// cameraMatrix = Rotation * Translate * Scale
 	cameraMatrix = lookAtv(cam->pos, cam->lookatpoint, cam->upvector);
 
 	// projection matrix
 	projectionMatrix = frustum(left, right, bottom, top, near, far);
 
-	complete = Mult(Mult(projectionMatrix,cameraMatrix), total);
-
-	glUniformMatrix4fv(glGetUniformLocation(ground_program, "groundMatrix"), 1, GL_TRUE, complete.m);
-
+	totalMatrix = Mult(Mult(projectionMatrix,cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(ground_program, "groundMatrix"), 1, GL_TRUE, totalMatrix.m);
 	DrawModel(ground, ground_program, "in_Position", "in_Normal", "inTexCoord");
 }
 
@@ -189,19 +172,8 @@ void display(void)
 
 
 	// clear the screen
-	// glClear(GL_COLOR_BUFFER_BIT);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-
-	// glUniformMatrix4fv(glGetUniformLocation(program, "proj"), 1, GL_TRUE, projectionMatrix);
-
-	// glUniformMatrix4fv(glGetUniformLocation(program, "myMatrix"), 1, GL_TRUE, myMatrix);
-	//
-	// glBindVertexArray(bunnyVertexArrayObjID);    // Select VAO
-  // glDrawElements(GL_TRIANGLES, bunny->numIndices, GL_UNSIGNED_INT, 0L);
-	//
-	// glBindVertexArray(groundVertexArrayObjID);	// Select VAO
-	// glDrawArrays(GL_TRIANGLES, 0, 6);	// draw object
 	drawBunny();
 	drawGround();
 
