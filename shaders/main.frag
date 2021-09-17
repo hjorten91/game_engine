@@ -12,7 +12,7 @@ void main(void)
 	float shade;
 
 	shade = dot(normalize(in_frag_Normal), light);
-	//out_Color = vec4(shade, shade, shade, 1.0);
+	out_Color = vec4(shade, shade, shade, 1.0);
 
-	out_Color = shade * texture(texUnit0, infragTexCoord);
+	//out_Color = shade * texture(texUnit0, infragTexCoord);
 }

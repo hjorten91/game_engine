@@ -33,17 +33,32 @@
 #define bottom -0.5
 
 // shaders
-GLuint program, ground_program, skybox_program;
+GLuint program, ground_program, skybox_program, windmill_program;
 
 // textures
 GLuint bunnyTex, groundTex, skyboxTex;
 
 // Models
 Model *bunny, *ground, *skybox;
+Model *blade, *windmill_balcony, *windmill_roof, *windmill_walls;
 
 // camera vectors
 struct camera cam_obj;
 struct camera * cam = &cam_obj;
+
+// light
+GLint isDirectional[] = {0,0,1,1};
+vec3 lightSourcesColorsArr[] = { {1.0f, 0.0f, 0.0f}, // Red light
+                                 {0.0f, 1.0f, 0.0f}, // Green light
+                                 {0.0f, 0.0f, 1.0f}, // Blue light
+                                 {1.0f, 1.0f, 1.0f} }; // White light
+
+vec3 lightSourcesDirectionsPositions[] = { {10.0f, 5.0f, 0.0f}, // Red light, positional
+                                        	 {0.0f, 5.0f, 10.0f}, // Green light, positional
+																           {-1.0f, 0.0f, 0.0f}, // Blue light along X
+																           {0.0f, 0.0f, -1.0f} }; // White light along Z
+GLfloat specularExponent[] = {100.0, 200.0, 60.0, 50.0, 300.0, 150.0};
+
 
 // handles mouse and camera interaction
 void mouse(int x, int y){
@@ -69,6 +84,11 @@ void upload_models(void)
 	bunny = LoadModel("objects/bunnyplus.obj");
 	ground = LoadModel("objects/skybox.obj");
 	skybox = LoadModel("objects/skybox.obj");
+
+	windmill_balcony = LoadModel("models/windmill/windmill-balcony.obj");
+	windmill_roof = LoadModel("models/windmill/windmill-roof.obj");
+	windmill_walls = LoadModel("models/windmill/windmill-walls.obj");
+	blade = LoadModel("models/windmill/blade.obj");
 }
 
 void upload_textures(void)
@@ -89,6 +109,14 @@ void upload_textures(void)
 	glUniform1i(glGetUniformLocation(skybox_program, "texUnit2"), 2); // Texture unit 2
 }
 
+void upload_light(void)
+{
+	glUniform3fv(glGetUniformLocation(windmill_program, "lightSourcesDirPosArr"), 4, &lightSourcesDirectionsPositions[0].x);
+	glUniform3fv(glGetUniformLocation(windmill_program, "lightSourcesColorArr"), 4, &lightSourcesColorsArr[0].x);
+	//glUniform1f(glGetUniformLocation(windmill_program, "specularExponent"), specularExponent[i]);
+	glUniform1iv(glGetUniformLocation(windmill_program, "isDirectional"), 4, isDirectional);
+}
+
 void init(void)
 {
 	glEnable(GL_DEPTH_TEST);
@@ -105,6 +133,7 @@ void init(void)
 	program = loadShaders("shaders/main.vert", "shaders/main.frag");
 	ground_program = loadShaders("shaders/ground.vert", "shaders/ground.frag");
 	skybox_program = loadShaders("shaders/skybox.vert", "shaders/skybox.frag");
+	windmill_program = loadShaders("shaders/windmill.vert", "shaders/windmill.frag");
 
 	upload_models();
 	upload_textures();
@@ -201,6 +230,84 @@ void drawSky(void)
 	glEnable(GL_DEPTH_TEST);
 }
 
+void drawWindmill(void)
+{
+	glUseProgram(windmill_program);
+	mat4 rot, trans, scale, modelMatrix, totalMatrix, projectionMatrix, cameraMatrix;
+	GLfloat t = (GLfloat)glutGet(GLUT_ELAPSED_TIME)/1000;
+
+	// model to world matrix
+	trans = T(10.0f,-2.3f,10.0f);
+	// rot = Mult(Mult(Rx(t), Ry(t)), Rz(t));
+
+	// rotation * transformation * scale
+	modelMatrix = trans;
+
+	// cameraMatrix = Rotation * Translation
+	cameraMatrix = lookAtv(cam->pos, cam->lookatpoint, cam->upvector);
+
+	// projection matrix
+	projectionMatrix = frustum(left, right, bottom, top, near, far);
+
+	// totalMatrix = projectionMatrix * cameraMatrix * modelMatrix
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniform1i(glGetUniformLocation(windmill_program,"texUnit0"),0);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(windmill_walls, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+
+	// roof
+	trans = T(10.0f,-2.3f,10.0f);
+	modelMatrix = trans;
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(windmill_roof, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+
+	//balcony
+	trans = T(10.0f,-2.3f,10.0f);
+	modelMatrix = trans;
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(windmill_balcony, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+
+	//blade 1
+	rot = Rx(t);
+	trans = T(14.6f,6.8f,10.0f);
+	mat4 trans2 = T(0.0f,0.3f,0.3f);
+	scale = S(0.7,0.7,0.7);
+	modelMatrix = Mult(Mult(Mult(trans,rot),trans2),scale);
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(blade, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+
+	//blade 2
+	rot = Rx(M_PI/2+t);
+	// trans = T(14.6f,5.9f,9.9f);
+	scale = S(0.7,0.7,0.7);
+	modelMatrix = Mult(Mult(Mult(trans,rot),trans2),scale);
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(blade, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+
+	//blade 3
+	rot = Rx(M_PI+t);
+	// trans = T(14.6f,6.1f,9.8f);
+	scale = S(0.7,0.7,0.7);
+	modelMatrix = Mult(Mult(Mult(trans,rot),trans2),scale);
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(blade, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+
+
+	//blade 4
+	rot = Rx(M_PI*3/2+t);
+	// trans = T(14.6f,6.4f,9.9f);
+	scale = S(0.7,0.7,0.7);
+	modelMatrix = Mult(Mult(Mult(trans,rot),trans2),scale);
+	totalMatrix = Mult(Mult(projectionMatrix, cameraMatrix), modelMatrix);
+	glUniformMatrix4fv(glGetUniformLocation(windmill_program, "windmillMatrix"), 1, GL_TRUE, totalMatrix.m);
+	DrawModel(blade, windmill_program, "in_Position", "in_Normal", "inTexCoord");
+}
+
 void display(void)
 {
 	printError("pre display");
@@ -210,6 +317,7 @@ void display(void)
 
 	drawSky();
 	drawBunny();
+	drawWindmill();
 	drawGround();
 
 	printError("display");
